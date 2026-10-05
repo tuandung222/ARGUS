@@ -287,11 +287,34 @@ def main() -> None:
     from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
     from qwen_vl_utils import process_vision_info
 
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
-        str(resolve_input_path(config, "model.path")),
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-    )
+    device = cfg_get(config, "run.device")
+    device_str = str(device).lower() if device is not None else None
+    if device_str == "mps" or (device_str is None and not torch.cuda.is_available() and torch.backends.mps.is_available()):
+        target_device = "mps"
+        model_dtype = torch.float16
+    elif device_str == "cpu" or (device_str is None and not torch.cuda.is_available()):
+        target_device = "cpu"
+        model_dtype = torch.float32
+    else:
+        target_device = "cuda"
+        model_dtype = torch.bfloat16
+
+    if target_device == "mps":
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            str(resolve_input_path(config, "model.path")),
+            torch_dtype=model_dtype,
+        ).to("mps")
+    elif target_device == "cpu":
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            str(resolve_input_path(config, "model.path")),
+            torch_dtype=model_dtype,
+        ).to("cpu")
+    else:
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            str(resolve_input_path(config, "model.path")),
+            torch_dtype=model_dtype,
+            device_map="auto",
+        )
     silence_greedy_sampling_warnings(model)
     processor = AutoProcessor.from_pretrained(str(resolve_input_path(config, "model.path")))
     processor.tokenizer.padding_side = "left"

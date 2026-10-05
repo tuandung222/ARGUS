@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.DS_Store
+outputs/
+outputs_video/
+outputs_audio/
+*.pickle
+*.pt
+*.bin
+.venv/

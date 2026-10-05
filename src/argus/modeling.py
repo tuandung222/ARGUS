@@ -13,8 +13,9 @@ from .media import media_block
 
 
 def set_cuda_device(device: str | None) -> None:
-    if device is not None and "CUDA_VISIBLE_DEVICES" not in os.environ:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
+    if device is not None and str(device).lower() not in ("mps", "cpu"):
+        if "CUDA_VISIBLE_DEVICES" not in os.environ:
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
 
 
 def _resolve_attr(root: Any, dotted_path: str) -> Any | None:
@@ -82,14 +83,37 @@ class VisionLanguageRunner:
         from qwen_vl_utils import process_vision_info
         from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
+        device_str = str(device).lower() if device is not None else None
+        if device_str == "mps" or (device_str is None and not torch.cuda.is_available() and torch.backends.mps.is_available()):
+            target_device = "mps"
+            if dtype == torch.bfloat16:
+                dtype = torch.float16
+        elif device_str == "cpu" or (device_str is None and not torch.cuda.is_available()):
+            target_device = "cpu"
+            if dtype == torch.bfloat16:
+                dtype = torch.float32
+        else:
+            target_device = "cuda"
+
         self.process_vision_info = process_vision_info
         self.video_options = video_options or {}
         self.processor = AutoProcessor.from_pretrained(str(model_path))
-        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-            str(model_path),
-            device_map="auto",
-            torch_dtype=dtype,
-        ).eval()
+        if target_device == "mps":
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                str(model_path),
+                torch_dtype=dtype,
+            ).to("mps").eval()
+        elif target_device == "cpu":
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                str(model_path),
+                torch_dtype=dtype,
+            ).to("cpu").eval()
+        else:
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                str(model_path),
+                device_map="auto",
+                torch_dtype=dtype,
+            ).eval()
         silence_greedy_sampling_warnings(self.model)
         if getattr(self.processor, "tokenizer", None) is not None:
             self.processor.tokenizer.padding_side = "left"
@@ -245,13 +269,36 @@ class AudioLanguageRunner:
         import librosa
         from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
 
+        device_str = str(device).lower() if device is not None else None
+        if device_str == "mps" or (device_str is None and not torch.cuda.is_available() and torch.backends.mps.is_available()):
+            target_device = "mps"
+            if dtype == torch.bfloat16:
+                dtype = torch.float16
+        elif device_str == "cpu" or (device_str is None and not torch.cuda.is_available()):
+            target_device = "cpu"
+            if dtype == torch.bfloat16:
+                dtype = torch.float32
+        else:
+            target_device = "cuda"
+
         self.librosa = librosa
         self.processor = AutoProcessor.from_pretrained(str(model_path))
-        self.model = Qwen2AudioForConditionalGeneration.from_pretrained(
-            str(model_path),
-            device_map="auto",
-            torch_dtype=dtype,
-        ).eval()
+        if target_device == "mps":
+            self.model = Qwen2AudioForConditionalGeneration.from_pretrained(
+                str(model_path),
+                torch_dtype=dtype,
+            ).to("mps").eval()
+        elif target_device == "cpu":
+            self.model = Qwen2AudioForConditionalGeneration.from_pretrained(
+                str(model_path),
+                torch_dtype=dtype,
+            ).to("cpu").eval()
+        else:
+            self.model = Qwen2AudioForConditionalGeneration.from_pretrained(
+                str(model_path),
+                device_map="auto",
+                torch_dtype=dtype,
+            ).eval()
         silence_greedy_sampling_warnings(self.model)
 
     @property

@@ -563,6 +563,7 @@ def main() -> None:
 
     env = os.environ.copy()
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    env.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     existing = env.get("PYTHONPATH")
     env["PYTHONPATH"] = str(SRC_DIR) if not existing else str(SRC_DIR) + os.pathsep + existing
     if args.modality:
@@ -574,10 +575,12 @@ def main() -> None:
     if modality not in ARGUS_MODALITIES and not args.only_data and not args.dry_run:
         raise ValueError("The ARGUS activation/probe/vector/defense pipeline is image-only in this release. Use scripts/build_dataset.py and scripts/run_baselines.py for video/audio.")
     if gpu_id is not None:
-        # Child stages must import GPU libraries after this restriction is set.
-        env["CUDA_VISIBLE_DEVICES"] = gpu_id
-        print(f"CUDA_VISIBLE_DEVICES={gpu_id}")
-    gpu_ids = split_gpu_ids(gpu_id)
+        if str(gpu_id).lower() not in ("mps", "cpu"):
+            env["CUDA_VISIBLE_DEVICES"] = gpu_id
+            print(f"CUDA_VISIBLE_DEVICES={gpu_id}")
+        else:
+            print(f"DEVICE={gpu_id}")
+    gpu_ids = split_gpu_ids(gpu_id) if (gpu_id and str(gpu_id).lower() not in ("mps", "cpu")) else []
 
     common = ["--config", args.config]
     if args.output_dir:

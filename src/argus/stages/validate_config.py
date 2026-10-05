@@ -32,13 +32,17 @@ def main() -> None:
 
     missing = []
     for key in required:
-        if key == "data.vtqa_path" and looks_like_hf_repo(cfg_get(config, key)):
-            print(f"{key}: {cfg_get(config, key)} [{cfg_get(config, 'data.vtqa_config', 'en-image')}]")
+        raw_val = cfg_get(config, key)
+        if key == "data.vtqa_path" and looks_like_hf_repo(raw_val):
+            print(f"{key}: {raw_val} [{cfg_get(config, 'data.vtqa_config', 'en-image')}]")
+            continue
+        if key == "model.path" and looks_like_hf_repo(raw_val):
+            print(f"{key}: {raw_val} [HF Hub repo]")
             continue
         path = resolve_input_path(config, key)
-        status = "ok" if path.exists() else "missing"
+        status = "ok" if (isinstance(path, Path) and path.exists()) else ("ok" if isinstance(path, str) else "missing")
         print(f"{key}: {path} [{status}]")
-        if not path.exists():
+        if isinstance(path, Path) and not path.exists():
             missing.append(str(path))
 
     if missing and not args.allow_missing:

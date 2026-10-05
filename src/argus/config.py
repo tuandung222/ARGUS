@@ -90,11 +90,16 @@ def cfg_get(config: dict[str, Any], dotted_key: str, default: Any = None) -> Any
     return value
 
 
-def resolve_input_path(config: dict[str, Any], dotted_key: str) -> Path:
+def resolve_input_path(config: dict[str, Any], dotted_key: str) -> Path | str:
     raw = cfg_get(config, dotted_key)
     if raw is None:
         raise KeyError(f"Missing required config value: {dotted_key}")
-    path = Path(str(raw)).expanduser()
+    raw_str = str(raw).strip()
+    if "/" in raw_str and not raw_str.startswith(("/", ".", "~")):
+        local_candidate = Path(config["_project_dir"]) / raw_str
+        if not local_candidate.exists():
+            return raw_str
+    path = Path(raw_str).expanduser()
     if not path.is_absolute():
         path = Path(config["_project_dir"]) / path
     return path.resolve()

@@ -73,15 +73,17 @@ class OrthogonalLogisticRegression:
         self.intercept_: float = 0.0
 
     def fit(self, x: np.ndarray, y: np.ndarray):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
+        dtype = torch.float32 if device.type == "mps" else torch.double
         torch.manual_seed(self.seed)
-        x_t = torch.tensor(x, dtype=torch.double, device=device)
-        y_t = torch.tensor(y, dtype=torch.double, device=device).view(-1, 1)
-        basis_t = torch.tensor(self.basis, dtype=torch.double, device=device)
-        q, _ = torch.linalg.qr(basis_t.T)
-        projection = torch.eye(x.shape[1], dtype=torch.double, device=device) - q @ q.T
-        v = torch.randn((x.shape[1], 1), dtype=torch.double, device=device) * 0.01
-        b = torch.zeros(1, dtype=torch.double, device=device)
+        x_t = torch.tensor(x, dtype=dtype, device=device)
+        y_t = torch.tensor(y, dtype=dtype, device=device).view(-1, 1)
+        # QR decomposition on CPU via numpy since aten::linalg_qr is not implemented on MPS
+        q_np, _ = np.linalg.qr(self.basis.T)
+        q = torch.tensor(q_np, dtype=dtype, device=device)
+        projection = torch.eye(x.shape[1], dtype=dtype, device=device) - q @ q.T
+        v = torch.randn((x.shape[1], 1), dtype=dtype, device=device) * 0.01
+        b = torch.zeros(1, dtype=dtype, device=device)
         v.requires_grad = True
         b.requires_grad = True
         optimizer = torch.optim.SGD([v, b], lr=self.lr)
@@ -121,13 +123,14 @@ class ParallelLogisticRegression:
         self.k_: float = 0.0
 
     def fit(self, x: np.ndarray, y: np.ndarray):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
+        dtype = torch.float32 if device.type == "mps" else torch.double
         torch.manual_seed(self.seed)
-        x_t = torch.tensor(x, dtype=torch.double, device=device)
-        y_t = torch.tensor(y, dtype=torch.double, device=device).view(-1, 1)
-        direction = torch.tensor(self.direction, dtype=torch.double, device=device).view(-1, 1)
-        k = torch.zeros(1, dtype=torch.double, device=device, requires_grad=True)
-        b = torch.zeros(1, dtype=torch.double, device=device, requires_grad=True)
+        x_t = torch.tensor(x, dtype=dtype, device=device)
+        y_t = torch.tensor(y, dtype=dtype, device=device).view(-1, 1)
+        direction = torch.tensor(self.direction, dtype=dtype, device=device).view(-1, 1)
+        k = torch.zeros(1, dtype=dtype, device=device, requires_grad=True)
+        b = torch.zeros(1, dtype=dtype, device=device, requires_grad=True)
         optimizer = torch.optim.SGD([k, b], lr=self.lr)
         loss_fn = torch.nn.BCEWithLogitsLoss()
         for _ in range(self.epochs):
